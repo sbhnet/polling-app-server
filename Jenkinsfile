@@ -36,7 +36,7 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
     }
     stage('运行 Helm') {
       container('helm') {
-        echo "查看 Helm Release 列表"
+        echo "查看 Helm Release 列表 "
         sh "helm list"
       }
     }
