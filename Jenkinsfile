@@ -1,6 +1,6 @@
 def label = "slave-${UUID.randomUUID().toString()}"
 
-podTemplate(label: label, containers: [
+podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
   containerTemplate(name: 'maven', image: 'maven:3.6-alpine', command: 'cat', ttyEnabled: true),
   containerTemplate(name: 'docker', image: 'docker', command: 'cat', ttyEnabled: true),
   containerTemplate(name: 'kubectl', image: 'cnych/kubectl', command: 'cat', ttyEnabled: true),
@@ -31,7 +31,7 @@ podTemplate(label: label, containers: [
     stage('运行 Kubectl') {
       container('kubectl') {
         echo "查看 K8S 集群 Pod 列表"
-        //sh "kubectl get pods"
+        sh "kubectl get pods"
       }
     }
     stage('运行 Helm') {
