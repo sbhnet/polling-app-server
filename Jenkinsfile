@@ -55,7 +55,7 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
         sh """
           sed -i "s#<IMAGE>#${image}#" manifests/k8s.yaml
           sed -i "s#<IMAGE_TAG>#${imageTag}#" manifests/k8s.yaml
-          kubectl apply -f manifests/k8s.yaml
+          #kubectl apply -f manifests/k8s.yaml
         """
       }
     }
