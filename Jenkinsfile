@@ -19,8 +19,14 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
       echo "测试阶段"
     }
     stage('代码编译打包') {
-      container('maven') {
-        echo "代码编译打包阶段"
+      try {
+        container('maven') {
+          echo "2. 代码编译打包阶段"
+          sh "mvn clean package -Dmaven.test.skip=true"
+        }
+      } catch (exc) {
+        println "构建失败 - ${currentBuild.fullDisplayName}"
+        throw(exc)
       }
     }
     stage('构建 Docker 镜像') {
