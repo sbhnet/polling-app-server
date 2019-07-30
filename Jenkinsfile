@@ -14,6 +14,10 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
     def myRepo = checkout scm
     def gitCommit = myRepo.GIT_COMMIT
     def gitBranch = myRepo.GIT_BRANCH
+    def imageTag = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    def dockerRegistryUrl = "docker.io"
+    def imageEndpoint = "zhaoxy8/polling-app-server"
+    def image = "${dockerRegistryUrl}/${imageEndpoint}"
 
     stage('单元测试') {
       echo "测试阶段"
@@ -30,9 +34,19 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
       }
     }
     stage('构建 Docker 镜像') {
-      container('docker') {
-        echo "构建 Docker 镜像阶段"
-      }
+      withCredentials([[$class: 'UsernamePasswordMultiBinding',
+          credentialsId: 'dockerHub',
+          usernameVariable: 'dockerHubUser',
+          passwordVariable: 'dockerHubPassword']]) {
+            container('docker') {
+              echo "3. 构建 Docker 镜像阶段"
+              sh """
+                docker login -u ${dockerHubUser} -p ${dockerHubPassword}
+                docker build -t ${image}:${imageTag} .
+                docker push ${image}:${imageTag}
+                """
+            }
+        }  
     }
     stage('运行 Kubectl') {
       container('kubectl') {
