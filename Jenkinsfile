@@ -6,7 +6,7 @@ def helmLint(String chartDir) {
 
 def helmInit() {
   println "初始化 helm client"
-  sh "helm init --client-only --stable-repo-url https://mirror.azure.cn/kubernetes/charts/"
+  sh "helm init --client-only --stable-repo-url https://kubernetes.oss-cn-hangzhou.aliyuncs.com/charts"
   sh "helm plugin install https://github.com/hypnoglow/helm-s3.git"
 }
 
@@ -27,6 +27,7 @@ def helmRepo(Map args) {
 }
 
 def helmDeploy(Map args) {
+    helmInit()
     helmRepo(args)
 
     if (args.dry_run) {
