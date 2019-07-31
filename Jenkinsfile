@@ -49,7 +49,7 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
 ], volumes: [
   hostPathVolume(mountPath: '/root/.m2', hostPath: '/var/run/m2'),
   hostPathVolume(mountPath: '/home/jenkins/.kube', hostPath: '/root/.kube'),
-  hostPathVolume(mountPath: '/home/jenkins/.aws', hostPath: '/root/.aws'),
+  hostPathVolume(mountPath: '/home/jenkins/.aws', hostPath: '/root/.aws'), //helm容器中S3的插件需要读取ec2的aws config信息，获取S3中的chart仓库包
   hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock')
 ]) {
   node(label) {

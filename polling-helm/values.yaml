@@ -22,8 +22,9 @@ persistence:
       subPath: ""
       accessMode: ReadWriteOnce
       size: 1Gi
-# imagePullSecrets:
+# imagePullSecrets: k8s 内部secrects,存储私有docker仓库的用户名密码
 #   - name: myreg
+# k8s 中创建命名: kubectl create secret docker-registry myreg --docker-server=registry.qikqiak.com --docker-username=DOCKER_USER --docker-password=DOCKER_PASSWORD --docker-email=DOCKER_EMAIL --namespace course
 
 ui:
   image:
