@@ -93,7 +93,7 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
     stage('运行 Kubectl') {
       container('kubectl') {
         echo "查看 K8S 集群 Pod 列表"
-        sh "kubectl get pods"
+        sh "kubectl get pods -n course -o wide"
         sh """
           sed -i "s#<IMAGE>#${image}#" manifests/k8s.yaml
           sed -i "s#<IMAGE_TAG>#${imageTag}#" manifests/k8s.yaml
@@ -112,8 +112,8 @@ podTemplate(label: label,serviceAccount: 'jenkins2', containers: [
                 namespace   : "course",
                 tag         : "${imageTag}",
                 image       : "${image}"
-				//username    : "${DOCKER_HUB_USER}", 私有chart仓库用户名
-				//password    : "${DOCKER_HUB_PASSWORD}" 私有chart仓库密码
+		//username    : "${DOCKER_HUB_USER}", 私有chart仓库用户名
+		//password    : "${DOCKER_HUB_PASSWORD}" 私有chart仓库密码
             )
             echo "[INFO] Helm 部署应用成功..."
       }
