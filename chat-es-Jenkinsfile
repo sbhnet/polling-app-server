@@ -1,0 +1,139 @@
+def label = "chat-es-${UUID.randomUUID().toString()}"
+
+podTemplate(name: 'chat-es', cloud: 'kubernetes',
+  namespace: 'kube-ops', label: label,
+  serviceAccount: 'jenkins2', 
+  containers: [
+  containerTemplate(
+      name: 'chat-es',
+      image: 'zhaoxy8/jenkins-slave-docker:dev-1d517a4',
+      command: 'cat',
+      ttyEnabled: true,
+      privileged: false,
+      alwaysPullImage: false
+      ),
+  containerTemplate(
+      name: 'kubectl', 
+      image: 'cnych/kubectl', 
+      command: 'cat', 
+      ttyEnabled: true)
+  ],
+  volumes: [
+    hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
+    hostPathVolume(mountPath: '/home/jenkins/.kube', hostPath: '/root/.kube')
+  ]
+){
+         parameters {
+             string(name: 'chatData', defaultValue: 'chat-es-data.tar.gz', description: 'location of chat-es artifact in bixbynext-apne2-deploy')
+             string(name: 'Comment', defaultValue: 'no comment', description: 'any comments?')
+         }
+node(label) {
+        def myRepo = checkout scm
+        def gitCommit = myRepo.GIT_COMMIT
+        def gitBranch = myRepo.GIT_BRANCH
+        def shortGitCommit = "${gitCommit[0..10]}"
+        def previousGitCommit = sh(script: "git rev-parse ${gitCommit}~", returnStdout: true)
+
+        def GIT_REPO = "codesamsung.com/ai_rnd/chat/chat-es"
+        def SERVICE = "chat-es"
+        def SERVICE_REPO  = "chat-es"
+        def ECR_LOC = "077516810609.dkr.ecr.cn-north-1.amazonaws.com.cn"
+	def IMAGE = "${ECR_LOC}/${SERVICE_REPO}"
+	def COPY_ARTIFACT = "s3://bixby-cn-deploy/tts/chat-es-data_190820_16h44m56s.tar.gz"
+	def CMD = "docker run -d --name chat-es -p"
+	def HEALTH_CHECK_ROUTE = "/_cluster/health"
+    	def HEALTH_CHECK_PORT = "9200"
+	def SERVICE_PORT = "9200"
+    	def TEST_DIR = "bvt_test"
+    	def TEST_SCRIPT = "BVT-standalone_chat-es.collection.json"
+    	def TEST_ENV = "chat-es-env.json"
+    	def TEST_DATA = "es-bvt-tc.json"
+        def NAMESPACE = "kube-ops"
+
+    stage('Prepare') {
+        try {
+        container('chat-es') {
+        echo "1.Prepare Stage"
+        //checkout scm
+	echo "111"+params.chatData
+        sh "chmod 770 git.sh && ./git.sh ${GIT_REPO}"
+        sh "ls && pwd "
+        sh """
+            pwd
+            echo "GIT_BRANCH=${gitBranch}" >> /etc/environment
+            echo "GIT_COMMIT=${gitCommit}" >> /etc/environment
+            
+            """
+        echo "Logging in to Amazon ECR_LOC..."
+        sh ''' $(aws ecr get-login --no-include-email --region cn-north-1) '''
+	sh "cd base && aws s3 --region cn-north-1 cp $COPY_ARTIFACT chat-es-data.tar.gz --quiet && tar -zxvf chat-es-data.tar.gz 1>/dev/null"
+       }
+          }
+          catch (exc) {
+        println "Failed to test - ${currentBuild.fullDisplayName}"
+        throw(exc)
+      }
+      }  
+    stage('Build') {
+        container('chat-es') {
+        echo "2.Building the Docker image..."
+        sh "cd base && ls && docker build -f Dockerfile -t ${SERVICE} . 2>&1 && cd ~/"
+	def IMAGE_TAG = sh(script: "docker inspect --format='{{.Id}}' $SERVICE  | cut -d ':' -f2", returnStdout: true) 
+	sh" docker tag $SERVICE $ECR_LOC/$SERVICE_REPO:$IMAGE_TAG "
+	sh" docker tag $SERVICE $ECR_LOC/$SERVICE_REPO:latest"
+        //sh "apk add jq"
+        sh "echo ${SERVICE}"
+        }
+    }
+    stage('运行 Kubectl') {
+      container('kubectl') {
+        echo "查看 K8S 集群 Pod 列表"
+	sh """
+	  pwd
+      	  sed -i "s#<IMAGE>#${IMAGE}#" chat-es.yaml
+      	  sed -i "s#<IMAGE_TAG>#latest#" chat-es.yaml
+      	  kubectl apply -f chat-es.yaml
+    	"""
+        sh "kubectl get pods"
+      }
+    }
+    stage('Test') {
+	container('chat-es') {  	
+      	  echo "2.Test Stage"
+	  //echo "$CMD $SERVICE_PORT:$SERVICE_PORT $SERVICE"
+	  //sh "$CMD $SERVICE_PORT:$SERVICE_PORT $SERVICE && chmod 770 graceful_init.sh"
+	  sh "sleep 60 && curl http://${SERVICE}.${NAMESPACE}:9200/_cluster/health"
+	  sh "until ./graceful_init.sh $HEALTH_CHECK_PORT $HEALTH_CHECK_ROUTE; do echo .; sleep 10; done"
+	  sh "cd base && sed -i 's/localhost/${SERVICE}.${NAMESPACE}/' $TEST_DIR/$TEST_ENV"
+          sh "pwd && cd base && newman run $TEST_DIR/$TEST_SCRIPT -e $TEST_DIR/$TEST_ENV -d $TEST_DIR/$TEST_DATA -r cli"
+	}
+    }
+   stage('删除 Kubectl') {
+      container('kubectl') {
+        echo "查看 K8S 集群 Pod 列表"
+        sh "kubectl delete -f chat-es.yaml"
+        sh "kubectl get pods"
+      }
+    }
+    stage('Push') {
+        container('chat-es') {
+          echo "3.Push Docker Image Stage"
+          //echo "Image Tag is $IMAGE_TAG"
+          def IMAGE_TAG = sh(script: "docker inspect --format='{{.Id}}' $SERVICE  | cut -d ':' -f2", returnStdout: true)
+          echo "Pushing the Docker image..." 
+          sh" docker push $ECR_LOC/$SERVICE_REPO:$IMAGE_TAG "
+          echo "Pushing the Docker image..." 
+          sh" docker push $ECR_LOC/$SERVICE_REPO:latest"
+        }
+    }
+    stage('Clean docker image') {
+        container('chat-es') {
+	  def IMAGE_TAG = sh(script: "docker inspect --format='{{.Id}}' $SERVICE  | cut -d ':' -f2", returnStdout: true)
+          echo "4. Clean docker image "
+          sh" docker rmi $ECR_LOC/$SERVICE_REPO:$IMAGE_TAG "
+          sh" docker rmi $ECR_LOC/$SERVICE_REPO:latest"
+          sh" docker rmi $SERVICE_REPO"
+        }
+    }
+  }
+}
